@@ -1,0 +1,62 @@
+/* ==========================================================================
+   Design Tokens - Deven Joshi Executive Luxury Aesthetic
+   ========================================================================== */
+
+:root {
+  /* Ultra-Luxury Obsidian Palette */
+  --bg-primary: #05070B;
+  --bg-secondary: #0A0E17;
+  --bg-tertiary: #101624;
+  --bg-surface: rgba(14, 20, 32, 0.55);
+  --bg-surface-hover: rgba(20, 28, 44, 0.75);
+  --bg-glass: rgba(10, 14, 23, 0.7);
+  
+  /* Text Colors */
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --text-dim: #475569;
+  
+  /* Refined Sovereign Gold & Platinum Accent */
+  --accent-gold: #C8A86B;
+  --accent-gold-light: #DFC28A;
+  --accent-gold-dim: rgba(200, 168, 107, 0.1);
+  --accent-gold-border: rgba(200, 168, 107, 0.25);
+  --accent-gold-glow: rgba(200, 168, 107, 0.15);
+  
+  --accent-blue: #38BDF8;
+  --accent-blue-dim: rgba(56, 189, 248, 0.08);
+  
+  /* Refined Subtle Borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.12);
+  --border-gold: rgba(200, 168, 107, 0.3);
+  
+  /* Typography */
+  --font-display: 'Cinzel', 'Playfair Display', Georgia, serif;
+  --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  /* Soft Luxury Shadows */
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.7);
+  --shadow-gold: 0 8px 30px rgba(200, 168, 107, 0.12);
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 400ms ease;
+  
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+  
+  /* Blurs */
+  --blur-glass: blur(16px);
+  --blur-heavy: blur(24px);
+}

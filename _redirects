@@ -1,0 +1,7 @@
+# Cloudflare Pages Redirects & Canonical Routing
+http://devenjoshi.com/* https://www.devenjoshi.com/:splat 301
+https://devenjoshi.com/* https://www.devenjoshi.com/:splat 301
+http://www.devenjoshi.com/* https://www.devenjoshi.com/:splat 301
+
+# SPA Single Page Fallback
+/* /index.html 200
