@@ -787,6 +787,8 @@ const AuthManager = (() => {
       updateUIState(true, session.role);
     } else {
       updateUIState(false);
+      if (uidInput) uidInput.value = '';
+      if (pwdInput) pwdInput.value = '';
     }
   }
 
