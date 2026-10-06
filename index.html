@@ -939,6 +939,11 @@
       <form id="gatekeeper-form" class="gatekeeper-form">
         <div id="gatekeeper-error" class="gatekeeper-error"></div>
 
+        <!-- Invisible Anti-Bot / AI Scraper Honeypot -->
+        <div style="opacity: 0; position: absolute; top: 0; left: 0; height: 0; width: 0; z-index: -1; pointer-events: none; overflow: hidden;" aria-hidden="true">
+          <input type="text" name="sec_auth_token_field" id="gatekeeper-hp-trap" tabindex="-1" autocomplete="off">
+        </div>
+
         <div class="form-group">
           <label class="form-label" for="gatekeeper-uid">User ID / Recruiter ID</label>
           <div class="input-wrapper">
