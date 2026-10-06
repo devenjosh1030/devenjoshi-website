@@ -951,7 +951,8 @@
           <label class="form-label" for="gatekeeper-pwd">Boardroom Passcode</label>
           <div class="input-wrapper">
             <span class="input-icon">🔒</span>
-            <input type="password" id="gatekeeper-pwd" class="form-input" placeholder="••••••••••••" required autocomplete="current-password">
+            <input type="password" id="gatekeeper-pwd" class="form-input" placeholder="••••••••••••" required autocomplete="current-password" style="padding-right: 2.75rem;">
+            <button type="button" id="toggle-pwd-visibility-btn" class="input-toggle-pwd" title="Toggle password visibility" aria-label="Toggle password visibility">👁️</button>
           </div>
         </div>
 
@@ -962,19 +963,6 @@
           </button>
         </div>
       </form>
-
-      <!-- Quick Credential Access Buttons for seamless evaluation -->
-      <div class="vip-bypass-box">
-        <span class="vip-bypass-text">Quick Authenticated Access Presets:</span>
-        <div style="display: flex; gap: 0.6rem; width: 100%;">
-          <button type="button" id="admin-bypass-btn" class="vip-bypass-btn" style="flex: 1; border-color: var(--accent-gold-border); color: var(--accent-gold-light); font-weight: 600;">
-            👑 Admin (Deven Joshi)
-          </button>
-          <button type="button" id="vip-bypass-btn" class="vip-bypass-btn" style="flex: 1;">
-            👤 Board Reviewer
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -1066,10 +1054,11 @@
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- ====================================================================
-         PROTECTED PDF MODAL PREVIEWER (Strict No-Download Policy)
-         ==================================================================== -->
+  <!-- ====================================================================
+       PROTECTED PDF MODAL PREVIEWER (Strict No-Download Policy)
+       ==================================================================== -->
   <div class="doc-modal-overlay" id="doc-modal-overlay">
     <div class="doc-modal-container">
       <div class="doc-modal-header">
@@ -1096,9 +1085,9 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="assets/js/auth.js?v=20260818"></script>
-  <script src="assets/js/tabs.js?v=20260818"></script>
-  <script src="assets/js/doc-viewer.js?v=20260818"></script>
-  <script src="assets/js/app.js?v=20260818"></script>
+  <script src="assets/js/auth.js?v=20261006"></script>
+  <script src="assets/js/tabs.js?v=20261006"></script>
+  <script src="assets/js/doc-viewer.js?v=20261006"></script>
+  <script src="assets/js/app.js?v=20261006"></script>
 </body>
 </html>

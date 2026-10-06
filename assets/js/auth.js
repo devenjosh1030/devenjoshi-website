@@ -1,16 +1,52 @@
 /**
  * Executive Boardroom Gatekeeper, RBAC & User Management System
  * Deven Joshi Board Portal (devenjoshi.com)
+ *
+ * Strict Role-Based Access Control (RBAC):
+ * - Gated Entry: Manual authentication required with valid User ID and Passcode.
+ * - Admin Exclusivity: Only authenticated Admins can view/open the Admin Control Panel,
+ *   create new users, update user IDs, edit passwords, or delete accounts.
  */
 
 const AuthManager = (() => {
   const SESSION_KEY = 'devenjoshi_board_auth_session';
   const USERS_DB_KEY = 'devenjoshi_board_users_db';
 
-  // Default Seed Users
+  // In-memory fallback if browser storage is blocked
+  const memoryStore = {};
+
+  function safeStorageGet(type, key) {
+    try {
+      const storage = type === 'session' ? window.sessionStorage : window.localStorage;
+      return storage.getItem(key);
+    } catch (e) {
+      return memoryStore[`${type}_${key}`] || null;
+    }
+  }
+
+  function safeStorageSet(type, key, value) {
+    try {
+      const storage = type === 'session' ? window.sessionStorage : window.localStorage;
+      storage.setItem(key, value);
+    } catch (e) {
+      memoryStore[`${type}_${key}`] = value;
+    }
+  }
+
+  function safeStorageRemove(type, key) {
+    try {
+      const storage = type === 'session' ? window.sessionStorage : window.localStorage;
+      storage.removeItem(key);
+    } catch (e) {
+      delete memoryStore[`${type}_${key}`];
+    }
+  }
+
+  // Default Authorized Seed Accounts
   const DEFAULT_USERS = [
     {
       uid: 'deven.joshi',
+      aliases: ['deven.joshi', 'deven', 'devenjoshi', 'admin', 'idevenjoshi@gmail.com'],
       pwd: 'DevenBoard2026!',
       name: 'Deven Joshi',
       org: 'Board Candidate / Owner',
@@ -20,6 +56,7 @@ const AuthManager = (() => {
     },
     {
       uid: 'board',
+      aliases: ['board', 'boardroom', 'boardroom2026', 'governance', 'committee', 'nominating'],
       pwd: 'Boardroom2026!',
       name: 'Nominating & Governance Committee',
       org: 'Corporate Board Review',
@@ -29,6 +66,7 @@ const AuthManager = (() => {
     },
     {
       uid: 'director',
+      aliases: ['director', 'search', 'recruiter', 'search chair'],
       pwd: 'Director2026!',
       name: 'Executive Search Chair',
       org: 'Search Partner Review',
@@ -44,7 +82,6 @@ const AuthManager = (() => {
   const uidInput = document.getElementById('gatekeeper-uid');
   const pwdInput = document.getElementById('gatekeeper-pwd');
   const errorMsg = document.getElementById('gatekeeper-error');
-  const vipBypassBtn = document.getElementById('vip-bypass-btn');
   const lockBtn = document.getElementById('portal-lock-btn');
   const statusBadge = document.getElementById('portal-access-status');
   const portalHeroUnlockBtn = document.getElementById('hero-enter-portal-btn');
@@ -53,26 +90,54 @@ const AuthManager = (() => {
   const adminModalCloseBtn = document.getElementById('admin-modal-close-btn');
   const addUserForm = document.getElementById('add-user-form');
   const usersTableBody = document.getElementById('users-table-body');
+  const togglePwdVisibilityBtn = document.getElementById('toggle-pwd-visibility-btn');
 
+  /**
+   * Retrieves and reconciles user database, ensuring root accounts are active.
+   */
   function getUsersDB() {
     try {
-      const stored = localStorage.getItem(USERS_DB_KEY);
-      if (!stored) {
-        localStorage.setItem(USERS_DB_KEY, JSON.stringify(DEFAULT_USERS));
-        return DEFAULT_USERS;
+      const stored = safeStorageGet('local', USERS_DB_KEY);
+      let users = [];
+
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            users = parsed;
+          }
+        } catch (e) {
+          users = [];
+        }
       }
-      return JSON.parse(stored);
+
+      // Reconcile and ensure DEFAULT_USERS are present
+      DEFAULT_USERS.forEach(seedUser => {
+        const existingIdx = users.findIndex(u => u && u.uid && u.uid.toLowerCase() === seedUser.uid.toLowerCase());
+        if (existingIdx === -1) {
+          users.unshift({ ...seedUser });
+        } else {
+          users[existingIdx].aliases = seedUser.aliases;
+          users[existingIdx].status = 'active';
+          if (!users[existingIdx].pwd) {
+            users[existingIdx].pwd = seedUser.pwd;
+          }
+        }
+      });
+
+      safeStorageSet('local', USERS_DB_KEY, JSON.stringify(users));
+      return users;
     } catch (e) {
-      return DEFAULT_USERS;
+      return [...DEFAULT_USERS];
     }
   }
 
   function saveUsersDB(users) {
-    localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+    safeStorageSet('local', USERS_DB_KEY, JSON.stringify(users));
   }
 
   function getSession() {
-    const session = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
+    const session = safeStorageGet('session', SESSION_KEY) || safeStorageGet('local', SESSION_KEY);
     if (!session) return null;
     try {
       return JSON.parse(session);
@@ -83,15 +148,15 @@ const AuthManager = (() => {
 
   function isAuthenticated() {
     const session = getSession();
-    return session && session.authenticated === true;
+    return Boolean(session && session.authenticated === true);
   }
 
   function isAdmin() {
     const session = getSession();
-    return session && session.authenticated === true && session.role === 'admin';
+    return Boolean(session && session.authenticated === true && session.role === 'admin');
   }
 
-  function setAuthenticated(user, remember = false) {
+  function setAuthenticated(user, remember = true) {
     const sessionData = JSON.stringify({
       authenticated: true,
       uid: user.uid,
@@ -99,19 +164,20 @@ const AuthManager = (() => {
       role: user.role || 'member',
       timestamp: Date.now()
     });
-    sessionStorage.setItem(SESSION_KEY, sessionData);
+
+    safeStorageSet('session', SESSION_KEY, sessionData);
     if (remember) {
-      localStorage.setItem(SESSION_KEY, sessionData);
+      safeStorageSet('local', SESSION_KEY, sessionData);
     }
     updateUIState(true, user.role);
   }
 
   function logout() {
-    sessionStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem(SESSION_KEY);
+    safeStorageRemove('session', SESSION_KEY);
+    safeStorageRemove('local', SESSION_KEY);
     updateUIState(false);
     showGatekeeper();
-    App.showToast('Board Portal Locked. Enter credentials to re-access.');
+    App.showToast('Board Portal Locked. Authentication required.');
   }
 
   function updateUIState(authed, role = 'member') {
@@ -134,20 +200,17 @@ const AuthManager = (() => {
       if (lockBtn) {
         lockBtn.style.display = 'inline-flex';
       }
+      // ONLY show Admin Panel button if the user is an active Administrator
       if (adminPanelBtn) {
-        adminPanelBtn.style.display = 'inline-flex';
         if (currentRole === 'admin') {
+          adminPanelBtn.style.display = 'inline-flex';
           adminPanelBtn.innerHTML = '⚙️ Admin Panel';
           adminPanelBtn.className = 'btn btn-gold';
           adminPanelBtn.style.padding = '0.4rem 0.9rem';
           adminPanelBtn.style.fontSize = '0.78rem';
-          adminPanelBtn.title = 'Manage Authorized Users';
+          adminPanelBtn.title = 'Manage Authorized Users & Credentials';
         } else {
-          adminPanelBtn.innerHTML = '⚙️ Switch to Admin';
-          adminPanelBtn.className = 'btn btn-outline-gold';
-          adminPanelBtn.style.padding = '0.4rem 0.85rem';
-          adminPanelBtn.style.fontSize = '0.78rem';
-          adminPanelBtn.title = 'Login with Admin Credentials';
+          adminPanelBtn.style.display = 'none';
         }
       }
     } else {
@@ -159,41 +222,60 @@ const AuthManager = (() => {
         lockBtn.style.display = 'none';
       }
       if (adminPanelBtn) {
-        adminPanelBtn.style.display = 'inline-flex';
-        adminPanelBtn.innerHTML = '⚙️ Admin Login';
-        adminPanelBtn.className = 'btn btn-outline-gold';
-        adminPanelBtn.style.padding = '0.4rem 0.85rem';
-        adminPanelBtn.style.fontSize = '0.78rem';
+        adminPanelBtn.style.display = 'none';
       }
     }
   }
 
-  function showGatekeeper(presetUid = '', presetPwd = '') {
+  function showGatekeeper() {
     if (gatekeeperOverlay) {
       gatekeeperOverlay.classList.remove('hidden');
-      if (presetUid && uidInput) uidInput.value = presetUid;
-      if (presetPwd && pwdInput) pwdInput.value = presetPwd;
-      if (uidInput) uidInput.focus();
+      if (uidInput) {
+        uidInput.value = '';
+        uidInput.focus();
+      }
+      if (pwdInput) pwdInput.value = '';
+      if (errorMsg) errorMsg.classList.remove('show');
     }
+  }
+
+  /**
+   * Matches input UID against user uid or recognized aliases.
+   */
+  function matchUser(users, inputUid, inputPwd) {
+    const cleanUid = inputUid.trim().toLowerCase();
+    const cleanPwd = inputPwd.trim();
+
+    return users.find(u => {
+      if (!u || u.status !== 'active') return false;
+      const uidMatch = (u.uid && u.uid.toLowerCase() === cleanUid) ||
+                       (Array.isArray(u.aliases) && u.aliases.some(a => a.toLowerCase() === cleanUid));
+      const pwdMatch = u.pwd === cleanPwd;
+      return uidMatch && pwdMatch;
+    });
   }
 
   function handleLogin(e) {
     if (e) e.preventDefault();
-    const inputUid = (uidInput ? uidInput.value : '').trim().toLowerCase();
+    const inputUid = (uidInput ? uidInput.value : '').trim();
     const inputPwd = (pwdInput ? pwdInput.value : '').trim();
 
+    if (!inputUid || !inputPwd) {
+      if (errorMsg) {
+        errorMsg.innerHTML = 'Please enter both User ID and Passcode.';
+        errorMsg.classList.add('show');
+      }
+      return;
+    }
+
     const users = getUsersDB();
-    const matchedUser = users.find(u => 
-      u.uid.toLowerCase() === inputUid && 
-      u.pwd === inputPwd && 
-      u.status === 'active'
-    );
+    const matchedUser = matchUser(users, inputUid, inputPwd);
 
     if (matchedUser) {
       if (errorMsg) errorMsg.classList.remove('show');
       setAuthenticated(matchedUser, true);
       App.showToast(`Authenticated as ${matchedUser.name} (${matchedUser.role === 'admin' ? '👑 Site Administrator' : '👤 Board Member'})`);
-      
+
       const hash = window.location.hash.replace('#', '');
       if (hash && document.getElementById(`tab-${hash}`)) {
         TabManager.switchTab(hash, false, true);
@@ -202,47 +284,27 @@ const AuthManager = (() => {
       }
     } else {
       if (errorMsg) {
-        errorMsg.innerHTML = '<strong>Invalid credentials.</strong><br>Admin: <code>deven.joshi</code> / <code>DevenBoard2026!</code><br>Board: <code>board</code> / <code>Boardroom2026!</code>';
+        errorMsg.innerHTML = '<strong>Access Denied:</strong> Invalid User ID or Passcode. Please verify your credentials or contact the administrator.';
         errorMsg.classList.add('show');
       }
     }
   }
 
-  function handleAdminBypass() {
-    const users = getUsersDB();
-    const adminUser = users.find(u => u.uid === 'deven.joshi') || DEFAULT_USERS[0];
-    if (uidInput) uidInput.value = adminUser.uid;
-    if (pwdInput) pwdInput.value = adminUser.pwd;
-    if (errorMsg) errorMsg.classList.remove('show');
-    setAuthenticated(adminUser, true);
-    App.showToast('👑 Site Administrator Access Granted (Deven Joshi)');
-    TabManager.switchTab('portfolio', true, true);
-  }
+  // =========================================================================
+  // STRICT ADMIN USER MANAGEMENT (Admin Only)
+  // =========================================================================
 
-  function handleVipBypass() {
-    const users = getUsersDB();
-    const boardUser = users.find(u => u.uid === 'board') || DEFAULT_USERS[1];
-    if (uidInput) uidInput.value = boardUser.uid;
-    if (pwdInput) pwdInput.value = boardUser.pwd;
-    if (errorMsg) errorMsg.classList.remove('show');
-    setAuthenticated(boardUser, true);
-    App.showToast('👤 Verified Boardroom Access Granted');
-    
-    const hash = window.location.hash.replace('#', '');
-    if (hash && document.getElementById(`tab-${hash}`)) {
-      TabManager.switchTab(hash, false, true);
-    } else {
-      TabManager.switchTab('portfolio', true, true);
-    }
-  }
-
-  // Admin User Management
   function renderUsersTable() {
     if (!usersTableBody) return;
+    if (!isAdmin()) {
+      usersTableBody.innerHTML = '<tr><td colspan="5" style="padding: 1rem; text-align: center; color: var(--text-muted);">Access Restricted to Administrators.</td></tr>';
+      return;
+    }
+
     const users = getUsersDB();
     usersTableBody.innerHTML = '';
 
-    users.forEach((user, index) => {
+    users.forEach((user) => {
       const tr = document.createElement('tr');
       tr.style.borderBottom = '1px solid var(--border-subtle)';
       const isAdminUser = user.role === 'admin';
@@ -263,12 +325,15 @@ const AuthManager = (() => {
             ${isAdminUser ? '👑 Admin' : '👤 Member'}
           </span>
         </td>
-        <td style="padding: 0.75rem 1rem; text-align: right;">
-          <button class="edit-pwd-btn btn btn-secondary" data-uid="${user.uid}" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; margin-right: 0.35rem;">
-            ✏️ Edit
+        <td style="padding: 0.75rem 1rem; text-align: right; white-space: nowrap;">
+          <button class="edit-uid-btn btn btn-secondary" data-uid="${user.uid}" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; margin-right: 0.25rem;" title="Change User ID">
+            🆔 Edit ID
+          </button>
+          <button class="edit-pwd-btn btn btn-secondary" data-uid="${user.uid}" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; margin-right: 0.25rem;" title="Change Password">
+            🔑 Edit Pass
           </button>
           ${isDeven ? '' : `
-            <button class="delete-user-btn btn btn-secondary" data-uid="${user.uid}" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; color: #FDA4AF; border-color: rgba(244,63,94,0.3);">
+            <button class="delete-user-btn btn btn-secondary" data-uid="${user.uid}" style="padding: 0.25rem 0.55rem; font-size: 0.75rem; color: #FDA4AF; border-color: rgba(244,63,94,0.3);" title="Delete User">
               🗑️ Delete
             </button>
           `}
@@ -277,28 +342,55 @@ const AuthManager = (() => {
       usersTableBody.appendChild(tr);
     });
 
-    // Attach View Password listeners
+    // Attach View Password listeners (Admin Only)
     document.querySelectorAll('.show-pwd-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (!isAdmin()) {
+          App.showToast('Unauthorized.');
+          return;
+        }
         const pwd = btn.getAttribute('data-pwd');
-        alert(`Password for this user: ${pwd}`);
+        alert(`Passcode for this account:\n${pwd}`);
       });
     });
 
-    // Attach Edit Password listeners
+    // Attach Edit User ID listeners (Admin Only)
+    document.querySelectorAll('.edit-uid-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!isAdmin()) {
+          App.showToast('Unauthorized: Only Administrator can change User IDs.');
+          return;
+        }
+        const oldUid = btn.getAttribute('data-uid');
+        const newUid = prompt(`Enter new User ID / Login for user '${oldUid}':`, oldUid);
+        if (newUid && newUid.trim().length > 0 && newUid.trim() !== oldUid) {
+          updateUserId(oldUid, newUid.trim());
+        }
+      });
+    });
+
+    // Attach Edit Password listeners (Admin Only)
     document.querySelectorAll('.edit-pwd-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (!isAdmin()) {
+          App.showToast('Unauthorized: Only Administrator can update passwords.');
+          return;
+        }
         const uid = btn.getAttribute('data-uid');
-        const newPwd = prompt(`Enter new password for user '${uid}':`);
+        const newPwd = prompt(`Enter new Passcode for user '${uid}':`);
         if (newPwd && newPwd.trim().length > 0) {
           updateUserPassword(uid, newPwd.trim());
         }
       });
     });
 
-    // Attach Delete listeners
+    // Attach Delete listeners (Admin Only)
     document.querySelectorAll('.delete-user-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (!isAdmin()) {
+          App.showToast('Unauthorized: Only Administrator can delete users.');
+          return;
+        }
         const uid = btn.getAttribute('data-uid');
         if (confirm(`Are you sure you want to permanently delete user '${uid}'?`)) {
           deleteUser(uid);
@@ -307,51 +399,130 @@ const AuthManager = (() => {
     });
   }
 
+  /**
+   * Creates a new user - ADMIN ONLY.
+   */
   function addNewUser(uid, pwd, name, org, role = 'member') {
+    if (!isAdmin()) {
+      App.showToast('Unauthorized: Administrator clearance required.');
+      return false;
+    }
+
+    const cleanUid = uid.trim();
+    const cleanPwd = pwd.trim();
+
+    if (!cleanUid || !cleanPwd) {
+      App.showToast('Error: User ID and Password are required.');
+      return false;
+    }
+
     const users = getUsersDB();
-    if (users.some(u => u.uid.toLowerCase() === uid.toLowerCase())) {
-      App.showToast(`Error: User '${uid}' already exists.`);
+    if (users.some(u => u.uid.toLowerCase() === cleanUid.toLowerCase())) {
+      App.showToast(`Error: User '${cleanUid}' already exists.`);
       return false;
     }
 
     users.push({
-      uid: uid.trim(),
-      pwd: pwd.trim(),
-      name: name.trim() || uid.trim(),
+      uid: cleanUid,
+      aliases: [cleanUid.toLowerCase()],
+      pwd: cleanPwd,
+      name: name.trim() || cleanUid,
       org: org.trim() || 'Board Reviewer',
-      role: role,
+      role: role === 'admin' ? 'admin' : 'member',
       created: new Date().toISOString().split('T')[0],
       status: 'active'
     });
 
     saveUsersDB(users);
     renderUsersTable();
-    App.showToast(`User '${uid}' created successfully.`);
+    App.showToast(`User '${cleanUid}' created successfully.`);
     return true;
   }
 
+  /**
+   * Updates an existing user's ID / Login handle - ADMIN ONLY.
+   */
+  function updateUserId(oldUid, newUid) {
+    if (!isAdmin()) {
+      App.showToast('Unauthorized: Administrator clearance required.');
+      return false;
+    }
+
+    const users = getUsersDB();
+    const cleanNew = newUid.trim();
+
+    if (users.some(u => u.uid.toLowerCase() === cleanNew.toLowerCase() && u.uid.toLowerCase() !== oldUid.toLowerCase())) {
+      App.showToast(`Error: User ID '${cleanNew}' is already taken.`);
+      return false;
+    }
+
+    const user = users.find(u => u.uid.toLowerCase() === oldUid.toLowerCase());
+    if (user) {
+      user.uid = cleanNew;
+      if (!user.aliases) user.aliases = [];
+      if (!user.aliases.includes(cleanNew.toLowerCase())) {
+        user.aliases.push(cleanNew.toLowerCase());
+      }
+      saveUsersDB(users);
+      renderUsersTable();
+      App.showToast(`User ID updated from '${oldUid}' to '${cleanNew}'.`);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Updates an existing user's password - ADMIN ONLY.
+   */
   function updateUserPassword(uid, newPwd) {
+    if (!isAdmin()) {
+      App.showToast('Unauthorized: Administrator clearance required.');
+      return false;
+    }
+
+    const cleanPwd = newPwd.trim();
+    if (!cleanPwd) {
+      App.showToast('Error: Passcode cannot be empty.');
+      return false;
+    }
+
     const users = getUsersDB();
     const user = users.find(u => u.uid.toLowerCase() === uid.toLowerCase());
     if (user) {
-      user.pwd = newPwd;
+      user.pwd = cleanPwd;
       saveUsersDB(users);
       renderUsersTable();
-      App.showToast(`Password updated for user '${uid}'.`);
+      App.showToast(`Passcode updated for user '${uid}'.`);
+      return true;
     }
+    return false;
   }
 
+  /**
+   * Deletes a user - ADMIN ONLY.
+   */
   function deleteUser(uid) {
+    if (!isAdmin()) {
+      App.showToast('Unauthorized: Administrator clearance required.');
+      return false;
+    }
+
+    if (uid.toLowerCase() === 'deven.joshi') {
+      App.showToast('Root administrator account cannot be deleted.');
+      return false;
+    }
+
     let users = getUsersDB();
     users = users.filter(u => u.uid.toLowerCase() !== uid.toLowerCase());
     saveUsersDB(users);
     renderUsersTable();
     App.showToast(`User '${uid}' deleted.`);
+    return true;
   }
 
   function openAdminModal() {
     if (!isAdmin()) {
-      App.showToast('Administrator privileges required.');
+      App.showToast('Access Denied: Administrator clearance required.');
       return;
     }
     renderUsersTable();
@@ -378,18 +549,21 @@ const AuthManager = (() => {
     }
   }
 
+  function setupPasswordToggle() {
+    if (togglePwdVisibilityBtn && pwdInput) {
+      togglePwdVisibilityBtn.addEventListener('click', () => {
+        const isPassword = pwdInput.getAttribute('type') === 'password';
+        pwdInput.setAttribute('type', isPassword ? 'text' : 'password');
+        togglePwdVisibilityBtn.textContent = isPassword ? '🙈' : '👁️';
+      });
+    }
+  }
+
   function init() {
-    getUsersDB(); // ensure DB initialized
+    getUsersDB(); // ensure DB initialized and seed users reconciled
 
     if (gatekeeperForm) {
       gatekeeperForm.addEventListener('submit', handleLogin);
-    }
-    const adminBypassBtn = document.getElementById('admin-bypass-btn');
-    if (adminBypassBtn) {
-      adminBypassBtn.addEventListener('click', handleAdminBypass);
-    }
-    if (vipBypassBtn) {
-      vipBypassBtn.addEventListener('click', handleVipBypass);
     }
     if (lockBtn) {
       lockBtn.addEventListener('click', logout);
@@ -398,12 +572,14 @@ const AuthManager = (() => {
       portalHeroUnlockBtn.addEventListener('click', handleHeroEnterPortal);
     }
 
+    setupPasswordToggle();
+
     if (adminPanelBtn) {
       adminPanelBtn.addEventListener('click', () => {
         if (isAdmin()) {
           openAdminModal();
         } else {
-          showGatekeeper('deven.joshi', 'DevenBoard2026!');
+          App.showToast('Access Denied: Administrator clearance required.');
         }
       });
     }
